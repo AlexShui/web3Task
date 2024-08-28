@@ -49,7 +49,7 @@ class GoogleV2:
 
 
 class Twitter:
-    def __init__(self, auth_token, proxy):
+    def __init__(self, auth_token):
         self.auth_token = auth_token
         bearer_token = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
         defaulf_headers = {
@@ -60,7 +60,7 @@ class Twitter:
             "authorization": bearer_token,
         }
         defaulf_cookies = {"auth_token": auth_token}
-        self.Twitter = AsyncSession(headers=defaulf_headers, cookies=defaulf_cookies, timeout=120, proxy=proxy)
+        self.Twitter = AsyncSession(headers=defaulf_headers, cookies=defaulf_cookies, timeout=120)
         self.auth_code = None
 
     async def get_auth_code(self, client_id, state, code_challenge):
