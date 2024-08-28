@@ -341,8 +341,7 @@ def menu():
 
 if __name__ == '__main__':
     _info = '''如果出现Failed to connect to twitter, com port，是网络问题，自己想办法，不行国外VPS
-    nstproxy注册链接：https://nstproxy.io/auth/register?code=2QJQ
-    nocaptcha注册链接：https://app.nstproxy.com/register?i=7JunWz
+    nstproxy注册链接：https://app.nstproxy.com/register?i=7JunWz
     capsolver注册链接：https://dashboard.capsolver.com/passport/register?inviteCode=-6bvop_IGgaT
     '''
     print(_info)
