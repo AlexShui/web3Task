@@ -17,15 +17,39 @@ def returnFalse(_):
 
 
 retry_pamars = {
-    'wait': wait_fixed(5),
+    'wait': wait_fixed(2),
     'stop': stop_after_attempt(70),
     'retry': retry_if_result(lambda x: x is False),
     'retry_error_callback': returnFalse
 }
 
 
+class GoogleV2:
+    def __init__(self, userToken):
+        headers = {
+            'User-Token': userToken,
+            'Developer-Id': 'dwBf1P'
+        }
+        self.client = AsyncSession(headers=headers, timeout=120)
+
+    async def nocaptcha(self):
+        try:
+            json_data = {
+                "referer": "https://nebx.io",
+                "sitekey": "6LdMFDEqAAAAABzsf5SsCM58915jgngF1l3dDfhA",
+                "size": "normal",
+                "title": "Nebx",
+            }
+            res = await self.client.post('http://api.nocaptcha.io/api/wanda/recaptcha/universal', json=json_data)
+            if res.json()['status'] == 1:
+                return res.json()['data']['token']
+            return None
+        except Exception as e:
+            return None
+
+
 class Twitter:
-    def __init__(self, auth_token):
+    def __init__(self, auth_token, proxy):
         self.auth_token = auth_token
         bearer_token = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
         defaulf_headers = {
@@ -36,7 +60,7 @@ class Twitter:
             "authorization": bearer_token,
         }
         defaulf_cookies = {"auth_token": auth_token}
-        self.Twitter = AsyncSession(headers=defaulf_headers, cookies=defaulf_cookies, timeout=120)
+        self.Twitter = AsyncSession(headers=defaulf_headers, cookies=defaulf_cookies, timeout=120, proxy=proxy)
         self.auth_code = None
 
     async def get_auth_code(self, client_id, state, code_challenge):
@@ -115,7 +139,7 @@ class Twitter:
 
 
 class Nebx:
-    def __init__(self, auth_token, inviteCode):
+    def __init__(self, auth_token, inviteCode, userToken):
         self.token = 'cfcd208495d565ef66e7dff9f98764da-8bb56c77b9dded9f82d6b9ccc6dde965-ae26fe5b4ce38925e6f13a7167fed3ea'
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -125,6 +149,7 @@ class Nebx:
         }
         self.client = AsyncSession(timeout=120, headers=headers, impersonate="chrome120")
         self.Twitter = Twitter(auth_token)
+        self.Google = GoogleV2(userToken)
         self.auth_token, self.inviteCode = auth_token, inviteCode
         self.uuid, self.clientId, self.state = None, None, None
 
@@ -146,8 +171,15 @@ class Nebx:
     @retry(**retry_pamars)
     async def get_auth_code(self):
         try:
+            googleCode = await self.Google.nocaptcha()
+            if googleCode is None:
+                logger.error(f'{self.auth_token}  获取谷歌验证码失败')
+                return False
             uuid = int(time.time() * 1000)
-            info = {"uuid": uuid}
+            info = {
+                "googleCode": googleCode,
+                "uuid": uuid
+            }
             info = json.dumps(info, separators=(',', ':'))
             res = await self.client.get(f'https://apiv1.nebx.io/login/xauth_url?sign={self.encode(info)}')
             if len(res.text) > 200:
@@ -182,8 +214,8 @@ class Nebx:
             res = await self.client.post('https://apiv1.nebx.io/login/sign_in', data=f'sign={self.encode(info)}')
             if len(res.text) > 200:
                 resdata = json.loads(self.decode(res.text))
-                self.token = resdata['token']
                 if 'token' in resdata:
+                    self.token = resdata['token']
                     self.client.headers.update({"Authorization": f"Bearer {self.token}"})
                     return True
             logger.error(f'{self.auth_token}  登录失败===网页返回错误{res.status_code}')
@@ -229,14 +261,14 @@ class Nebx:
             return False
 
 
-async def do(semaphore, inviteCode, auth_token):
+async def do(semaphore, inviteCode, auth_token, nocaptcha_userToken):
     async with semaphore:
-        nebx = Nebx(auth_token, inviteCode)
+        nebx = Nebx(auth_token, inviteCode, nocaptcha_userToken)
         if await nebx.get_auth_code() and await nebx.login() and await nebx.check() and await nebx.receive():
             return True
 
 
-async def main(filePath, tread, inviteCode):
+async def main(filePath, tread, inviteCode, nocaptcha_userToken):
     semaphore = asyncio.Semaphore(int(tread))
     try:
         with open(f'领取成功.txt', 'r') as f:
@@ -245,7 +277,7 @@ async def main(filePath, tread, inviteCode):
         with open(f'领取成功.txt', 'w'):
             received = set()
     with open(filePath, 'r') as f:
-        task = [do(semaphore, inviteCode, auth_token.strip()) for auth_token in f if auth_token.strip().strip() not in received]
+        task = [do(semaphore, inviteCode, auth_token.strip(), nocaptcha_userToken) for auth_token in f if auth_token.strip().strip() not in received]
     await asyncio.gather(*task)
 
 
@@ -254,11 +286,16 @@ def menu():
     _filePath = input("请输入账户文件路径：").strip()
     _tread = input("请输入并发数：").strip()
     _inviteCode = input("请输入大号邀请码：").strip()
+    _nocaptcha_userToken = input('请输入nocaptcha的userToken:').strip()
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main(_filePath, _tread, _inviteCode))
+    asyncio.run(main(_filePath, _tread, _inviteCode, _nocaptcha_userToken))
 
 
 if __name__ == '__main__':
+    _info = '''如果出现Failed to connect to twitter, com port，是网络问题，自己想办法，不行国外VPS
+    nocaptcha注册链接：https://app.nstproxy.com/register?i=7JunWz
+    '''
+    print(_info)
     print('hdd.cm 推特低至2毛')
     print('hdd.cm 推特低至2毛')
     while True:
