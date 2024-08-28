@@ -182,7 +182,7 @@ class Twitter:
 
 
 class Nebx:
-    def __init__(self, auth_token, inviteCode, userToken, nstproxy_Channel, nstproxy_Password):
+    def __init__(self, auth_token, inviteCode, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password):
         self.token = 'cfcd208495d565ef66e7dff9f98764da-8bb56c77b9dded9f82d6b9ccc6dde965-ae26fe5b4ce38925e6f13a7167fed3ea'
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -194,8 +194,8 @@ class Nebx:
         nstproxy = f"http://{nstproxy_Channel}-residential-country_ANY-r_0m-s_{session}:{nstproxy_Password}@gate.nstproxy.io:24125"
         self.client = AsyncSession(timeout=120, headers=headers, impersonate="chrome120", proxy=nstproxy)
         self.Twitter = Twitter(auth_token, proxy=nstproxy)
-        self.Google = GoogleV2(userToken)
-        self.auth_token, self.inviteCode = auth_token, inviteCode
+        self.Google = GoogleV2(google_userToken)
+        self.auth_token, self.inviteCode, self.google_platform = auth_token, inviteCode, google_platform
         self.uuid, self.clientId, self.state, self.googleCode = None, None, None, None
 
     def encode(self, info):
@@ -217,7 +217,10 @@ class Nebx:
     async def get_auth_code(self):
         try:
             if self.googleCode is None:
-                self.googleCode = await self.Google.capsolver()
+                if self.google_platform == 1:
+                    self.googleCode = await self.Google.nocaptcha()
+                elif self.google_platform == 2:
+                    self.googleCode = await self.Google.capsolver()
                 if self.googleCode is None:
                     logger.error(f'{self.auth_token}  获取谷歌验证码失败')
                     return False
@@ -307,14 +310,14 @@ class Nebx:
             return False
 
 
-async def do(semaphore, inviteCode, auth_token, nocaptcha_userToken, nstproxy_Channel, nstproxy_Password):
+async def do(semaphore, inviteCode, auth_token, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password):
     async with semaphore:
-        nebx = Nebx(auth_token, inviteCode, nocaptcha_userToken, nstproxy_Channel, nstproxy_Password)
+        nebx = Nebx(auth_token, inviteCode, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password)
         if await nebx.get_auth_code() and await nebx.login() and await nebx.check() and await nebx.receive():
             return True
 
 
-async def main(filePath, tread, inviteCode, nocaptcha_userToken, nstproxy_Channel, nstproxy_Password):
+async def main(filePath, tread, inviteCode, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password):
     semaphore = asyncio.Semaphore(int(tread))
     try:
         with open(f'领取成功.txt', 'r') as f:
@@ -323,7 +326,7 @@ async def main(filePath, tread, inviteCode, nocaptcha_userToken, nstproxy_Channe
         with open(f'领取成功.txt', 'w'):
             received = set()
     with open(filePath, 'r') as f:
-        task = [do(semaphore, inviteCode, auth_token.strip(), nocaptcha_userToken, nstproxy_Channel, nstproxy_Password) for auth_token in f if auth_token.strip().strip() not in received]
+        task = [do(semaphore, inviteCode, auth_token.strip(), google_platform, google_userToken, nstproxy_Channel, nstproxy_Password) for auth_token in f if auth_token.strip().strip() not in received]
     await asyncio.gather(*task)
 
 
@@ -334,15 +337,25 @@ def menu():
     _inviteCode = input("请输入大号邀请码：").strip()
     _nstproxy_Channel = input('请输入nstproxy_通道ID:').strip()
     _nstproxy_Password = input('请输入nstproxy_密码:').strip()
-    _capsolver_userToken = input('请输入capsolver的ApiKey:').strip()
+    _google_platform = input('使用nocaptcha请输入1，使用capsolver请输入2:').strip()
+    _google_platform = int(_google_platform)
+    if _google_platform == 1:
+        _google_userToken = input('请输入nocaptcha的ApiKey:').strip()
+    elif _google_platform == 2:
+        _google_userToken = input('请输入capsolver的ApiKey:').strip()
+    else:
+        print('输入错误')
+        return
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main(_filePath, _tread, _inviteCode, _capsolver_userToken, _nstproxy_Channel, _nstproxy_Password))
+    asyncio.run(main(_filePath, _tread, _inviteCode, _google_platform, _google_userToken, _nstproxy_Channel, _nstproxy_Password))
 
 
 if __name__ == '__main__':
     _info = '''如果出现Failed to connect to twitter, com port，是网络问题，自己想办法，不行国外VPS
-    nstproxy注册链接：https://app.nstproxy.com/register?i=7JunWz
-    capsolver注册链接：https://dashboard.capsolver.com/passport/register?inviteCode=-6bvop_IGgaT
+        谷歌验证码平台，二选一，注册充值
+        nstproxy注册链接：https://app.nstproxy.com/register?i=7JunWz
+        capsolver注册链接（这个便宜）：https://dashboard.capsolver.com/passport/register?inviteCode=-6bvop_IGgaT
+        nocaptcha注册链接（这个快）：https://www.nocaptcha.io/register?c=dwBf1P 
     '''
     print(_info)
     print('hdd.cm 推特低至2毛')
