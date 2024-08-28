@@ -57,8 +57,8 @@ class GoogleV2:
             "appId": "69AE5D43-F131-433D-92C8-0947B2CF150A",
             "task": {
                 "type": "ReCaptchaV2TaskProxyLess",
-                "websiteKey": "https://nebx.io",
-                "websiteURL": "6LdMFDEqAAAAABzsf5SsCM58915jgngF1l3dDfhA"
+                "websiteKey": "6LdMFDEqAAAAABzsf5SsCM58915jgngF1l3dDfhA",
+                "websiteURL": "https://nebx.io"
             }
         }
         for _ in range(3):
@@ -349,3 +349,4 @@ if __name__ == '__main__':
     print('hdd.cm 推特低至2毛')
     while True:
         menu()
+
