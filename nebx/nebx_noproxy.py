@@ -192,7 +192,7 @@ class Nebx:
         self.Twitter = Twitter(auth_token)
         self.Google = GoogleV2(userToken)
         self.auth_token, self.inviteCode = auth_token, inviteCode
-        self.uuid, self.clientId, self.state = None, None, None
+        self.uuid, self.clientId, self.state, self.googleCode = None, None, None, None
 
     def encode(self, info):
         encodeKey = self.client.headers.get('Authorization').split('-')[0].replace('Bearer ', '')[:16]
@@ -212,13 +212,14 @@ class Nebx:
     @retry(**retry_pamars)
     async def get_auth_code(self):
         try:
-            googleCode = await self.Google.capsolver()
-            if googleCode is None:
-                logger.error(f'{self.auth_token}  获取谷歌验证码失败')
-                return False
+            if self.googleCode is None:
+                self.googleCode = await self.Google.capsolver()
+                if self.googleCode is None:
+                    logger.error(f'{self.auth_token}  获取谷歌验证码失败')
+                    return False
             uuid = int(time.time() * 1000)
             info = {
-                "googleCode": googleCode,
+                "googleCode": self.googleCode,
                 "uuid": uuid
             }
             info = json.dumps(info, separators=(',', ':'))
