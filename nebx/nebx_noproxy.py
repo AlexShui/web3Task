@@ -239,10 +239,10 @@ async def do(semaphore, inviteCode, auth_token):
 async def main(filePath, tread, inviteCode):
     semaphore = asyncio.Semaphore(int(tread))
     try:
-        with open(f'领取成功.txt.txt', 'r') as f:
+        with open(f'领取成功.txt', 'r') as f:
             received = set(line.strip().split('----')[0] for line in f)
     except:
-        with open(f'领取成功.txt.txt', 'w'):
+        with open(f'领取成功.txt', 'w'):
             received = set()
     with open(filePath, 'r') as f:
         task = [do(semaphore, inviteCode, auth_token.strip()) for auth_token in f if auth_token.strip().strip() not in received]
