@@ -224,7 +224,7 @@ class Nebx:
             res = await self.client.post('https://apiv1.nebx.io/user/check_award', data=f'sign={self.encode(info)}')
             if res.status_code == 200:
                 logger.success(f'{self.auth_token}  领取积分成功')
-                with open('领取成功', 'a') as f:
+                with open('领取成功.txt', 'a') as f:
                     f.write(f'{self.auth_token}----{self.token}\n')
                 return True
             logger.error(f'{self.auth_token}  领取积分失败===网页返回错误{res.status_code}')
@@ -244,10 +244,10 @@ async def do(semaphore, inviteCode, auth_token, nstproxy_Channel, nstproxy_Passw
 async def main(filePath, tread, inviteCode, nstproxy_Channel, nstproxy_Password):
     semaphore = asyncio.Semaphore(int(tread))
     try:
-        with open(f'领取成功', 'r') as f:
+        with open(f'领取成功.txt', 'r') as f:
             received = set(line.strip().split('----')[0] for line in f)
     except:
-        with open(f'领取成功', 'w'):
+        with open(f'领取成功.txt', 'w'):
             received = set()
     with open(filePath, 'r') as f:
         task = [do(semaphore, inviteCode, auth_token.strip(), nstproxy_Channel, nstproxy_Password) for auth_token in f if auth_token.strip().strip() not in received]
