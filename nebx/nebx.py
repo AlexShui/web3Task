@@ -19,8 +19,8 @@ def returnFalse(_):
 
 
 retry_pamars = {
-    'wait': wait_fixed(5),
-    'stop': stop_after_attempt(7),
+    'wait': wait_fixed(2),
+    'stop': stop_after_attempt(70),
     'retry': retry_if_result(lambda x: x is False),
     'retry_error_callback': returnFalse
 }
@@ -118,16 +118,19 @@ class Twitter:
 
 class Nebx:
     def __init__(self, auth_token, inviteCode, nstproxy_Channel, nstproxy_Password):
+        self.token = 'cfcd208495d565ef66e7dff9f98764da-8bb56c77b9dded9f82d6b9ccc6dde965-ae26fe5b4ce38925e6f13a7167fed3ea'
         headers = {
-            "Authorization": "Bearer cfcd208495d565ef66e7dff9f98764da-8bb56c77b9dded9f82d6b9ccc6dde965-ae26fe5b4ce38925e6f13a7167fed3ea",
+            "Authorization": f"Bearer {self.token}",
             "Origin": "https://nebx.io",
-            "Referer": "https://nebx.io/"
+            "Referer": "https://nebx.io/",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
         }
         session = ''.join(random.choices(string.digits + string.ascii_letters, k=10))
         nstproxy = f"http://{nstproxy_Channel}-residential-country_ANY-r_0m-s_{session}:{nstproxy_Password}@gate.nstproxy.io:24125"
         self.client = AsyncSession(timeout=120, headers=headers, impersonate="chrome120", proxy=nstproxy)
         self.Twitter = Twitter(auth_token, proxy=nstproxy)
         self.auth_token, self.inviteCode = auth_token, inviteCode
+
         self.uuid, self.clientId, self.state = None, None, None
 
     def encode(self, info):
@@ -185,7 +188,8 @@ class Nebx:
             if len(res.text) > 200:
                 resdata = json.loads(self.decode(res.text))
                 if 'token' in resdata:
-                    self.client.headers.update({"Authorization": f"Bearer {resdata['token']}"})
+                    self.token = resdata['token']
+                    self.client.headers.update({"Authorization": f"Bearer {self.token}"})
                     return True
             logger.error(f'{self.auth_token}  登录失败===网页返回错误{res.status_code}')
             return False
@@ -220,6 +224,8 @@ class Nebx:
             res = await self.client.post('https://apiv1.nebx.io/user/check_award', data=f'sign={self.encode(info)}')
             if res.status_code == 200:
                 logger.success(f'{self.auth_token}  领取积分成功')
+                with open('领取成功', 'a') as f:
+                    f.write(f'{self.auth_token}----{self.token}\n')
                 return True
             logger.error(f'{self.auth_token}  领取积分失败===网页返回错误{res.status_code}')
             return False
@@ -237,8 +243,14 @@ async def do(semaphore, inviteCode, auth_token, nstproxy_Channel, nstproxy_Passw
 
 async def main(filePath, tread, inviteCode, nstproxy_Channel, nstproxy_Password):
     semaphore = asyncio.Semaphore(int(tread))
+    try:
+        with open(f'领取成功', 'r') as f:
+            received = set(line.strip().split('----')[0] for line in f)
+    except:
+        with open(f'领取成功', 'w'):
+            received = set()
     with open(filePath, 'r') as f:
-        task = [do(semaphore, inviteCode, account_line.strip(), nstproxy_Channel, nstproxy_Password) for account_line in f]
+        task = [do(semaphore, inviteCode, auth_token.strip(), nstproxy_Channel, nstproxy_Password) for auth_token in f if auth_token.strip().strip() not in received]
     await asyncio.gather(*task)
 
 
