@@ -26,26 +26,67 @@ retry_pamars = {
 
 class GoogleV2:
     def __init__(self, userToken):
-        headers = {
-            'User-Token': userToken,
-            'Developer-Id': 'dwBf1P'
-        }
-        self.client = AsyncSession(headers=headers, timeout=120)
+        self.userToken = userToken
+        self.client = AsyncSession(timeout=120)
+        self.taskId = None
 
     async def nocaptcha(self):
         try:
+            headers = {
+                'User-Token': self.userToken,
+                'Developer-Id': 'dwBf1P'
+            }
             json_data = {
                 "referer": "https://nebx.io",
                 "sitekey": "6LdMFDEqAAAAABzsf5SsCM58915jgngF1l3dDfhA",
                 "size": "normal",
                 "title": "Nebx",
             }
-            res = await self.client.post('http://api.nocaptcha.io/api/wanda/recaptcha/universal', json=json_data)
+            res = await self.client.post('http://api.nocaptcha.io/api/wanda/recaptcha/universal', headers=headers, json=json_data)
             if res.json()['status'] == 1:
                 return res.json()['data']['token']
             return None
         except Exception as e:
             return None
+
+    async def createTaskcapsolver(self):
+        json_data = {
+            "clientKey": self.userToken,
+            "appId": "69AE5D43-F131-433D-92C8-0947B2CF150A",
+            "task": {
+                "type": "ReCaptchaV2TaskProxyLess",
+                "websiteKey": "https://nebx.io",
+                "websiteURL": "6LdMFDEqAAAAABzsf5SsCM58915jgngF1l3dDfhA"
+            }
+        }
+        for _ in range(3):
+            try:
+                response = await self.client.post('https://api.capsolver.com/createTask', json=json_data)
+                if response.json()['errorId'] == 0:
+                    self.taskId = response.json()['taskId']
+                    return True
+            except:
+                pass
+        return False
+
+    async def capsolver(self):
+        if not await self.createTaskcapsolver():
+            return None
+        json_data = {
+            "clientKey": self.userToken,
+            "taskId": self.taskId
+        }
+        for _ in range(30):
+            try:
+                response = await self.client.post('https://api.capsolver.com/getTaskResult', json=json_data)
+                if response.json()['errorId'] == 0 and response.json()['status'] == 'ready':
+                    return response.json()['solution']['gRecaptchaResponse']
+                elif response.json()['errorId'] == 1:
+                    return None
+            except:
+                pass
+            await asyncio.sleep(3)
+        return None
 
 
 class Twitter:
@@ -171,7 +212,7 @@ class Nebx:
     @retry(**retry_pamars)
     async def get_auth_code(self):
         try:
-            googleCode = await self.Google.nocaptcha()
+            googleCode = await self.Google.capsolver()
             if googleCode is None:
                 logger.error(f'{self.auth_token}  获取谷歌验证码失败')
                 return False
@@ -286,14 +327,15 @@ def menu():
     _filePath = input("请输入账户文件路径：").strip()
     _tread = input("请输入并发数：").strip()
     _inviteCode = input("请输入大号邀请码：").strip()
-    _nocaptcha_userToken = input('请输入nocaptcha的userToken:').strip()
+    _capsolver_userToken = input('请输入capsolver的ApiKey:').strip()
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main(_filePath, _tread, _inviteCode, _nocaptcha_userToken))
+    asyncio.run(main(_filePath, _tread, _inviteCode, _capsolver_userToken))
 
 
 if __name__ == '__main__':
     _info = '''如果出现Failed to connect to twitter, com port，是网络问题，自己想办法，不行国外VPS
     nocaptcha注册链接：https://app.nstproxy.com/register?i=7JunWz
+    capsolver注册链接：https://dashboard.capsolver.com/passport/register?inviteCode=-6bvop_IGgaT
     '''
     print(_info)
     print('hdd.cm 推特低至2毛')
