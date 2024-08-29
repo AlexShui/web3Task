@@ -256,6 +256,7 @@ class Nebx:
                 "state": self.state,
                 "code": self.Twitter.auth_code,
                 "clientId": self.clientId,
+                "googleCode": self.googleCode,
                 "inviteCode": self.inviteCode,
                 "uuid": self.uuid
             }
@@ -358,8 +359,8 @@ if __name__ == '__main__':
         nocaptcha注册链接（这个快）：https://www.nocaptcha.io/register?c=dwBf1P 
     '''
     print(_info)
-    print('hdd.cm 推特低至2毛')
-    print('hdd.cm 推特低至2毛')
+    print('hdd.cm 推特低至1毛5')
+    print('hdd.cm 推特低至1毛5')
     while True:
         menu()
 
