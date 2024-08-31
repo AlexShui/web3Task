@@ -1,5 +1,6 @@
 import asyncio, sys
 import json
+import os
 import random
 import string
 import time
@@ -12,6 +13,10 @@ from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_result
 
 logger.remove()
 logger.add(sys.stdout, colorize=True, format="<g>{time:HH:mm:ss:SSS}</g> | <level>{message}</level>")
+old_tokens = []
+inviteCodesList = []
+inviteTime = 0
+setTimes = 0
 
 
 def returnFalse(_):
@@ -20,7 +25,7 @@ def returnFalse(_):
 
 retry_pamars = {
     'wait': wait_fixed(2),
-    'stop': stop_after_attempt(70),
+    'stop': stop_after_attempt(7),
     'retry': retry_if_result(lambda x: x is False),
     'retry_error_callback': returnFalse
 }
@@ -40,7 +45,7 @@ class GoogleV2:
             }
             json_data = {
                 "referer": "https://nebx.io",
-                "sitekey": "6LdMFDEqAAAAABzsf5SsCM58915jgngF1l3dDfhA",
+                "sitekey": "6LcqEzMqAAAAAH0rnqHOElnkzZUv_yXsi_AOis7t",
                 "size": "normal",
                 "title": "Nebx",
             }
@@ -57,7 +62,7 @@ class GoogleV2:
             "appId": "69AE5D43-F131-433D-92C8-0947B2CF150A",
             "task": {
                 "type": "ReCaptchaV2TaskProxyLess",
-                "websiteKey": "6LdMFDEqAAAAABzsf5SsCM58915jgngF1l3dDfhA",
+                "websiteKey": "6LcqEzMqAAAAAH0rnqHOElnkzZUv_yXsi_AOis7t",
                 "websiteURL": "https://nebx.io"
             }
         }
@@ -153,7 +158,8 @@ class Twitter:
             logger.error(f'{self.auth_token}  推特授权异常：{e}')
             return False
 
-    async def follow(self):
+    async def follow(self, user_id):
+        global old_tokens
         try:
             data = {
                 'include_profile_interstitial_type': 1,
@@ -168,21 +174,33 @@ class Twitter:
                 'include_ext_verified_type': 1,
                 'include_ext_profile_image_shape': 1,
                 'skip_status': 1,
-                'user_id': 1747452081911504896
+                'user_id': user_id
             }
             headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-            res = await self.Twitter.post('https://x.com/i/api/1.1/friendships/create.json', data=data, headers=headers)
+            res = await self.Twitter.post('https://twitter.com/i/api/1.1/friendships/create.json', data=data, headers=headers)
             if res.status_code == 200:
                 return True
-            logger.error(f'{self.auth_token}  推特关注失败')
-            return False
+            elif "errors" in res.json():
+                if res.json()["errors"][0]["code"] == 353:
+                    self.Twitter.headers.update({"x-csrf-token": res.cookies["ct0"]})
+                    return await self.follow(user_id)
+                elif res.json()["errors"][0]["code"] == 32 or res.json()["errors"][0]["code"] == 64:
+                    logger.error(f'{self.auth_token}  账号被封 剔除')
+                    old_tokens.remove(self.auth_token)
+                elif res.json()["errors"][0]["code"] == 326:
+                    logger.error(f'{self.auth_token}  账号被锁定 剔除')
+                    old_tokens.remove(self.auth_token)
+                elif res.json()["errors"][0]["code"] == 344:
+                    logger.error(f'{self.auth_token}  账号关注限制 剔除')
+                    old_tokens.remove(self.auth_token)
+                return False
         except Exception as e:
             logger.error(f'{self.auth_token}  推特关注异常：{e}')
             return False
 
 
 class Nebx:
-    def __init__(self, auth_token, inviteCode, google_platform, google_userToken):
+    def __init__(self, accounts, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password):
         self.token = 'cfcd208495d565ef66e7dff9f98764da-8bb56c77b9dded9f82d6b9ccc6dde965-ae26fe5b4ce38925e6f13a7167fed3ea'
         headers = {
             "Authorization": f"Bearer {self.token}",
@@ -190,11 +208,14 @@ class Nebx:
             "Referer": "https://nebx.io/",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
         }
-        self.client = AsyncSession(timeout=120, headers=headers, impersonate="chrome120")
-        self.Twitter = Twitter(auth_token)
+        session = ''.join(random.choices(string.digits + string.ascii_letters, k=10))
+        self.nstproxy = f"http://{nstproxy_Channel}-residential-country_ANY-r_0m-s_{session}:{nstproxy_Password}@gate.nstproxy.io:24125"
+        self.client = AsyncSession(timeout=120, headers=headers, impersonate="chrome120", proxy=self.nstproxy)
+        self.Twitter = Twitter(accounts[4])
         self.Google = GoogleV2(google_userToken)
-        self.auth_token, self.inviteCode, self.google_platform = auth_token, inviteCode, google_platform
+        self.auth_token, self.google_platform, self.inviteCode = accounts[4], google_platform, None
         self.uuid, self.clientId, self.state, self.googleCode = None, None, None, None
+        self.userId = accounts[-2].split('-')[0]
 
     def encode(self, info):
         encodeKey = self.client.headers.get('Authorization').split('-')[0].replace('Bearer ', '')[:16]
@@ -210,6 +231,25 @@ class Nebx:
         cipher = AES.new(key, AES.MODE_CBC, key)
         decrypted = unpad(cipher.decrypt(binascii.unhexlify(info)), AES.block_size)
         return decrypted.decode('utf-8')
+
+    async def follow(self):
+        try:
+            logger.info(f'{self.auth_token}  开始刷推特关注')
+            if len(old_tokens) < 8:
+                logger.error(f'{self.auth_token}  老号数量不够8')
+                return False
+            times = 0
+            for old_token in old_tokens:
+                if await Twitter(old_token).follow(self.userId):
+                    times += 1
+                    if times == 8:
+                        return True
+            else:
+                logger.error(f'{self.auth_token}  推特关注{times}, 未达到8')
+                return False
+        except Exception as e:
+            logger.error(f'{self.auth_token}  推特关注异常：{e}')
+            return False
 
     @retry(**retry_pamars)
     async def get_auth_code(self):
@@ -241,7 +281,10 @@ class Nebx:
                 else:
                     logger.error(f'{self.auth_token}  推特授权失败')
                     return False
-            logger.error(f'{self.auth_token}  获取推特授权链接失败===网页返回错误{res.status_code}')
+            elif 'google verification failed' in res.text:
+                self.googleCode = None
+                return False
+            logger.error(f'{self.auth_token}  获取推特授权链接失败===网页返回错误{res.status_code} {res.text}')
             return False
         except Exception as e:
             logger.error(f'{self.auth_token}  获取推特授权链接异常：{e}')
@@ -249,6 +292,8 @@ class Nebx:
 
     @retry(**retry_pamars)
     async def login(self):
+        global inviteCodesList
+        self.inviteCode = inviteCodesList[0]
         try:
             info = {
                 "state": self.state,
@@ -263,10 +308,12 @@ class Nebx:
             if len(res.text) > 200:
                 resdata = json.loads(self.decode(res.text))
                 if 'token' in resdata:
+                    with open('登录成功.txt', 'a') as f:
+                        f.write(f'{self.auth_token}----{self.token}\n')
                     self.token = resdata['token']
                     self.client.headers.update({"Authorization": f"Bearer {self.token}"})
                     return True
-            logger.error(f'{self.auth_token}  登录失败===网页返回错误{res.status_code}')
+            logger.error(f'{self.auth_token}  登录失败===网页返回错误{res.status_code} {res.text}')
             return False
         except Exception as e:
             logger.error(f'{self.auth_token}  登录异常：{e}')
@@ -284,7 +331,7 @@ class Nebx:
                 score = resdata['score']
                 logger.success(f'{self.auth_token}  积分{score}')
                 return True
-            logger.error(f'{self.auth_token}  检测积分失败===网页返回错误{res.status_code}')
+            logger.error(f'{self.auth_token}  检测积分失败===网页返回错误{res.status_code} {res.text}')
             return False
         except Exception as e:
             logger.error(f'{self.auth_token}  登检测积分异常：{e}')
@@ -292,48 +339,82 @@ class Nebx:
 
     @retry(**retry_pamars)
     async def receive(self):
+        global inviteTime, inviteCodesList, setTimes
         try:
             uuid = int(time.time() * 1000)
             info = {"uuid": uuid}
             info = json.dumps(info, separators=(',', ':'))
             res = await self.client.post('https://apiv1.nebx.io/user/check_award', data=f'sign={self.encode(info)}')
             if res.status_code == 200:
-                logger.success(f'{self.auth_token}  领取积分成功')
+                inviteTime += 1
+                logger.success(f'{self.auth_token}  领取积分成功 {self.inviteCode} 邀请 {inviteTime}/{setTimes}')
+                if inviteTime == setTimes:
+                    inviteTime = 0
+                    inviteCodesList = inviteCodesList[1:]
+                    logger.info(f'{self.auth_token}  邀请码{self.inviteCode}已达到设定次数, 更换下一个邀请码{inviteCodesList[0]}')
                 with open('领取成功.txt', 'a') as f:
                     f.write(f'{self.auth_token}----{self.token}\n')
                 return True
-            logger.error(f'{self.auth_token}  领取积分失败===网页返回错误{res.status_code}')
+            elif res.text == 'Already received the reward':
+                logger.error(f'{self.auth_token}  已被领取过')
+                with open('登录成功.txt', 'a') as f:
+                    f.write(f'{self.auth_token}----{self.token}\n')
+                return True
+            logger.error(f'{self.auth_token}  领取积分失败===网页返回错误{res.status_code} {res.text}')
             return False
         except Exception as e:
             logger.error(f'{self.auth_token}  领取积分异常：{e}')
             return False
 
 
-async def do(semaphore, inviteCode, auth_token, google_platform, google_userToken):
+async def do(semaphore, accounts, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password):
     async with semaphore:
-        nebx = Nebx(auth_token, inviteCode, google_platform, google_userToken)
-        if await nebx.get_auth_code() and await nebx.login() and await nebx.check() and await nebx.receive():
-            return True
+        nebx = Nebx(accounts, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password)
+        if await nebx.follow():
+            if await nebx.get_auth_code() and await nebx.login():
+                if await nebx.check() and await nebx.receive():
+                    return True
+            else:
+                with open('未跑成功.txt', 'a') as f:
+                    f.write(f"{'----'.join(accounts)}\n")
 
 
-async def main(filePath, tread, inviteCode, google_platform, google_userToken):
+async def main(filePath, oldfilePath, tread, inviteCodes, times, google_platform, google_userToken, nstproxy_Channel, nstproxy_Password):
     semaphore = asyncio.Semaphore(int(tread))
+    os.system(f"title 小号：{os.path.basename(filePath)}  老号：{os.path.basename(oldfilePath)}")
+    global old_tokens, inviteCodesList, setTimes
+    with open(oldfilePath, 'r') as f:
+        old_tokens = [line.strip() for line in f]
+    inviteCodesList = inviteCodes.split(',')
+    inviteCodesList = [code.strip() for code in inviteCodesList if len(code.strip()) != 0]
+    setTimes = int(times)
     try:
         with open(f'领取成功.txt', 'r') as f:
             received = set(line.strip().split('----')[0] for line in f)
     except:
         with open(f'领取成功.txt', 'w'):
             received = set()
+    try:
+        with open(f'登录成功.txt', 'r') as f:
+            received.union(set(line.strip().split('----')[0] for line in f))
+    except:
+        with open(f'登录成功.txt', 'w'):
+            pass
+
     with open(filePath, 'r') as f:
-        task = [do(semaphore, inviteCode, auth_token.strip(), google_platform, google_userToken) for auth_token in f if auth_token.strip().strip() not in received]
+        task = [do(semaphore, accounts.split('----'), google_platform, google_userToken, nstproxy_Channel, nstproxy_Password) for accounts in f if accounts.split('----')[4] not in received]
     await asyncio.gather(*task)
 
 
 def menu():
-    print('账户文件格式：auth_token一行一个放txt')
-    _filePath = input("请输入账户文件路径：").strip()
+    _filePath = input("请输入账户文件路径(hdd.cm购买格式)：").strip()
+    print("老号用来关注小号，有几十个就行")
+    _oldfilePath = input("请输入老号文件路径(只需要auth_token)：").strip()
     _tread = input("请输入并发数：").strip()
-    _inviteCode = input("请输入大号邀请码：").strip()
+    _inviteCodes = input("请输入大号邀请码(多个用,割开)：").strip()
+    _times = input("请输入每个邀请码使用次数(实际一般会比这个多)：").strip()
+    _nstproxy_Channel = input('请输入nstproxy_通道ID:').strip()
+    _nstproxy_Password = input('请输入nstproxy_密码:').strip()
     _google_platform = input('使用nocaptcha请输入1，使用capsolver请输入2:').strip()
     _google_platform = int(_google_platform)
     if _google_platform == 1:
@@ -344,11 +425,13 @@ def menu():
         print('输入错误')
         return
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main(_filePath, _tread, _inviteCode, _google_platform, _google_userToken))
+    asyncio.run(main(_filePath, _oldfilePath, _tread, _inviteCodes, _times, _google_platform, _google_userToken, _nstproxy_Channel, _nstproxy_Password))
 
 
 if __name__ == '__main__':
     _info = '''如果出现Failed to connect to twitter, com port，是网络问题，自己想办法，不行国外VPS
+        代理平台：注册充值，创建频道
+        nstproxy注册链接：https://app.nstproxy.com/register?i=7JunWz
         谷歌验证码平台，二选一，注册充值
         capsolver注册链接（这个便宜）：https://dashboard.capsolver.com/passport/register?inviteCode=-6bvop_IGgaT
         nocaptcha注册链接（这个快）：https://www.nocaptcha.io/register?c=dwBf1P 
@@ -356,6 +439,8 @@ if __name__ == '__main__':
     print(_info)
     print('hdd.cm 推特低至1毛5')
     print('hdd.cm 推特低至1毛5')
+    print('会用用，不会用算了，不提供技术支持')
+    print('会用用，不会用算了，不提供技术支持')
+    print('会用用，不会用算了，不提供技术支持')
     while True:
         menu()
-
