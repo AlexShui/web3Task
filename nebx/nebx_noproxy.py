@@ -45,7 +45,7 @@ class GoogleV2:
             }
             json_data = {
                 "referer": "https://nebx.io",
-                "sitekey": "6LcqEzMqAAAAAH0rnqHOElnkzZUv_yXsi_AOis7t",
+                "sitekey": "6LdTHTUqAAAAAL9L_93M7N5z_oeDIkeyfB_Ud3Y6",
                 "size": "normal",
                 "title": "Nebx",
             }
@@ -62,7 +62,7 @@ class GoogleV2:
             "appId": "69AE5D43-F131-433D-92C8-0947B2CF150A",
             "task": {
                 "type": "ReCaptchaV2TaskProxyLess",
-                "websiteKey": "6LcqEzMqAAAAAH0rnqHOElnkzZUv_yXsi_AOis7t",
+                "websiteKey": "6LdTHTUqAAAAAL9L_93M7N5z_oeDIkeyfB_Ud3Y6",
                 "websiteURL": "https://nebx.io"
             }
         }
@@ -108,7 +108,8 @@ class Twitter:
             "authorization": bearer_token,
         }
         defaulf_cookies = {"auth_token": auth_token}
-        self.Twitter = AsyncSession(headers=defaulf_headers, cookies=defaulf_cookies, timeout=120)
+        proxy = "http://127.0.0.1:7890"
+        self.Twitter = AsyncSession(headers=defaulf_headers, cookies=defaulf_cookies, timeout=120, proxy=proxy)
         self.auth_code = None
 
     async def get_auth_code(self, client_id, state, code_challenge):
@@ -260,7 +261,7 @@ class Nebx:
                 elif self.google_platform == 2:
                     self.googleCode = await self.Google.capsolver()
                 if self.googleCode is None:
-                    logger.error(f'{self.auth_token}  获取谷歌验证码失败')
+                    logger.error(f'{self.auth_token}  谷歌验证码打码失败')
                     return False
             uuid = int(time.time() * 1000)
             info = {
@@ -408,7 +409,7 @@ async def main(filePath, oldfilePath, tread, inviteCodes, times, google_platform
 
 def menu():
     _filePath = input("请输入账户文件路径(hdd.cm购买格式)：").strip()
-    print("老号用来关注小号，有几十个就行")
+    print("老号用来关注小号，满月就行，最少8个，一般有几十个就行")
     _oldfilePath = input("请输入老号文件路径(只需要auth_token)：").strip()
     _tread = input("请输入并发数：").strip()
     _inviteCodes = input("请输入大号邀请码(多个用,割开)：").strip()
