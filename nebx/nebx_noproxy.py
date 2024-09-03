@@ -430,12 +430,15 @@ def menu():
 
 
 if __name__ == '__main__':
-    _info = '''如果出现Failed to connect to twitter, com port，是网络问题，自己想办法，不行国外VPS
-        代理平台：注册充值，创建频道
+    _info = '''        如果出现Failed to connect to twitter, com port，是网络问题，自己想办法，不行国外VPS
+        代理平台：注册充值，创建频道，网站走代理，推特不走代理
         nstproxy注册链接：https://app.nstproxy.com/register?i=7JunWz
         谷歌验证码平台，二选一，注册充值
         capsolver注册链接（这个便宜）：https://dashboard.capsolver.com/passport/register?inviteCode=-6bvop_IGgaT
         nocaptcha注册链接（这个快）：https://www.nocaptcha.io/register?c=dwBf1P 
+        
+        老号是用来关注小号，让小号符合要求的，满月号即可
+        最少有8个老号就行，但是关注多了会限制，所以建议多准备些
     '''
     print(_info)
     print('hdd.cm 推特低至1毛5')
