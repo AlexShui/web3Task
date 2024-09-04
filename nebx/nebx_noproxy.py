@@ -45,7 +45,7 @@ class GoogleV2:
             }
             json_data = {
                 "referer": "https://nebx.io",
-                "sitekey": "6LdTHTUqAAAAAL9L_93M7N5z_oeDIkeyfB_Ud3Y6",
+                "sitekey": "6Lc4HzUqAAAAAGlPLu190C8q_ZUJsi_Id_im-oMl",
                 "size": "normal",
                 "title": "Nebx",
             }
@@ -62,7 +62,7 @@ class GoogleV2:
             "appId": "69AE5D43-F131-433D-92C8-0947B2CF150A",
             "task": {
                 "type": "ReCaptchaV2TaskProxyLess",
-                "websiteKey": "6LdTHTUqAAAAAL9L_93M7N5z_oeDIkeyfB_Ud3Y6",
+                "websiteKey": "6Lc4HzUqAAAAAGlPLu190C8q_ZUJsi_Id_im-oMl",
                 "websiteURL": "https://nebx.io"
             }
         }
